@@ -56,7 +56,7 @@ Each service is its own Docker image and its own Cloud Run service, built and de
 
 ```powershell
 uv sync --all-packages
-uv run mcp_server/bq_mcp_server.py          # needs mcp_server/.env (template: infra/.env.example); serves http://localhost:8000/mcp
+uv run mcp_server/bq_mcp_server.py          # settings in mcp_server/.env (keys listed at the top of bq_mcp_server.py)
 ```
 
 Then open [agent_test.ipynb](agent_test.ipynb). It signs you in with Google, connects the agent to the MCP server,
