@@ -31,11 +31,13 @@ jobs:
       - run: npm run lint
 
   build:
+    if: vars.GCP_WIF_PROVIDER != ''   # skip cleanly until GCP is bootstrapped (docs/deploy.md)
     needs: test
     uses: ./.github/workflows/_build-push.yml
     with: { service: web, context: web, dockerfile: web/Dockerfile }
 
   deploy:
+    if: vars.GCP_WIF_PROVIDER != ''   # skip cleanly until GCP is bootstrapped (docs/deploy.md)
     needs: build
     runs-on: ubuntu-latest
     environment: prod

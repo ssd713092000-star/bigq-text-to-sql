@@ -54,11 +54,13 @@ jobs:
       - run: uv run --no-sync pytest -q api/tests
 
   build:
+    if: vars.GCP_WIF_PROVIDER != ''   # skip cleanly until GCP is bootstrapped (docs/deploy.md)
     needs: test
     uses: ./.github/workflows/_build-push.yml
     with: { service: api, context: ., dockerfile: api/Dockerfile }
 
   migrate:
+    if: vars.GCP_WIF_PROVIDER != ''   # skip cleanly until GCP is bootstrapped (docs/deploy.md)
     needs: build
     runs-on: ubuntu-latest
     environment: prod
@@ -90,6 +92,7 @@ jobs:
             --quiet
 
   deploy:
+    if: vars.GCP_WIF_PROVIDER != ''   # skip cleanly until GCP is bootstrapped (docs/deploy.md)
     needs: [build, migrate]
     runs-on: ubuntu-latest
     environment: prod

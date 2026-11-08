@@ -33,11 +33,13 @@ jobs:
       - run: uv run --no-sync pytest -q mcp_server/tests
 
   build:
+    if: vars.GCP_WIF_PROVIDER != ''   # skip cleanly until GCP is bootstrapped (docs/deploy.md)
     needs: test
     uses: ./.github/workflows/_build-push.yml
     with: { service: mcp, context: ., dockerfile: mcp_server/Dockerfile }
 
   deploy:
+    if: vars.GCP_WIF_PROVIDER != ''   # skip cleanly until GCP is bootstrapped (docs/deploy.md)
     needs: build
     runs-on: ubuntu-latest
     environment: prod
