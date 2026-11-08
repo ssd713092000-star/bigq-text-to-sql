@@ -1,0 +1,88 @@
+run_id,model,config,judge,id,category,expected_behavior,execution_accuracy,workflow,answer_correctness,faithfulness,behavior,latency_s,gb_processed,input_tokens,output_tokens,n_validate_failures,error,exec_reason,workflow_reason,judge_reason,question,final_sql
+20261108-180351__gemini-3.6-flash__rag,gemini-3.6-flash,rag,gemini-3.8-flash,a01,ambiguous,clarify,,1.0,,,1.0,5.88,0,1755,415,0,,,all checks passed,"The response perfectly aligns with the expected behavior by asking clear, concise clarifying questions regarding metrics (trips vs. revenue), location type (pickup vs. dropoff), and granularity (borough vs. zone) without attempting to execute SQL or guess an interpretation.",What is the best area?,
+20261108-180351__gemini-3.6-flash__rag,gemini-3.6-flash,rag,gemini-3.8-flash,a03,ambiguous,clarify,,0.0,,,0.0,87.4,3.654,36394,3972,0,,,failed: no_sql_run,"The model answered a guessed interpretation by assuming a full-year 2025 analysis and running a SQL query, rather than asking a clarifying question about the desired time period or metric aspect as expected.",How are tips doing?,"SELECT
+  COUNT(*) AS total_trips,
+  COUNTIF(payment_type = 'Credit card') AS cc_trips,
+  ROUND(SUM(CASE WHEN payment_type = 'Credit card' AND total_amount > 0 THEN tip_amount ELSE 0 END), 2) AS total_tips_usd,
+  ROUND(AVG(CASE WHEN payment_type = 'Credit card' AND total_amount > 0 THEN tip_amount END), 2) AS avg_tip_usd,
+  ROUND(AVG(CASE WHEN payment_type = 'Credit card' AND fare_amount > 0 AND total_amount > 0 THEN SAFE_DIVIDE(tip_amount, fare_amount) * 100 END), 2) AS avg_tip_pct
+FROM `project-16e0643c-a78c-4dd8-89b.nyc_taxi.silver_yellow_taxi_trips`
+WHERE pickup_date BETWEEN '2025-01-01' AND '2025-12-31'
+  AND payment_type != 'Voided';"
+20261108-180351__gemini-3.6-flash__rag,gemini-3.6-flash,rag,gemini-3.8-flash,e02,easy,answer,1.0,1.0,1.0,1.0,,57.58,0,17841,1250,0,,1 rows; values match for ['revenue'],all checks passed,"The actual output accurately identifies the total revenue for Q1 2025 as $292,520,404.79, directly matching the expected figure. Per the evaluation steps, the inclusion of additional context, tables, assumptions, and SQL is not penalized.",What was the total revenue in Q1 2025?,"SELECT
+  ROUND(SUM(total_amount), 2) AS total_revenue_usd,
+  COUNT(*) AS total_trips
+FROM `project-16e0643c-a78c-4dd8-89b.nyc_taxi.silver_yellow_taxi_trips`
+WHERE pickup_date BETWEEN '2025-01-01' AND '2025-03-31'
+  AND payment_type != 'Voided'
+  AND total_amount > 0;"
+20261108-180351__gemini-3.6-flash__rag,gemini-3.6-flash,rag,gemini-3.8-flash,e11,easy,answer,1.0,1.0,1.0,1.0,,92.33,0,10398,748,0,,1 rows; values match for ['trips'],all checks passed,"The actual output accurately identifies the key figure of 68,111 trips, matching the expected output of 68111. It correctly answers the question for Christmas Day 2025, and the inclusion of assumptions and the SQL query is permitted by the evaluation criteria.",How many taxi trips were there on Christmas Day 2025?,"SELECT COUNT(*) AS total_trips
+FROM `project-16e0643c-a78c-4dd8-89b.nyc_taxi.silver_yellow_taxi_trips`
+WHERE pickup_date = '2025-12-25';"
+20261108-180351__gemini-3.6-flash__rag,gemini-3.6-flash,rag,gemini-3.8-flash,h04,hard,answer,0.0,0.4,0.0,1.0,,180.01,,,,,TimeoutError: ,agent produced no successful query result,"failed: searched_examples_first, ran_query, validated_before_run","The actual output provided no answer, completely missing all required monthly revenue figures, cumulative totals, and information for 2025 requested in the prompt.",Show the cumulative revenue by month for 2025.,
+20261108-180351__gemini-3.6-flash__rag,gemini-3.6-flash,rag,gemini-3.8-flash,h05,hard,answer,1.0,1.0,1.0,1.0,,70.86,0.253,24037,4166,0,,10 rows; values match for ['increase'],all checks passed,"The actual output precisely matches the expected results for all 10 pickup zones, including exact figures for January trips, December trips, and trip count growth.","Which 10 pickup zones grew the most in trip count from January to December 2025, among zones with at least 1,000 trips in January?","WITH jan_trips AS (
+  SELECT
+    pu_location_id,
+    pu_zone,
+    pu_borough,
+    COUNT(*) AS jan_trip_count
+  FROM `project-16e0643c-a78c-4dd8-89b.nyc_taxi.silver_yellow_taxi_trips`
+  WHERE pickup_date BETWEEN '2025-01-01' AND '2025-01-31'
+    AND pu_borough NOT IN ('Unknown', 'N/A')
+  GROUP BY pu_location_id, pu_zone, pu_borough
+  HAVING COUNT(*) >= 1000
+),
+dec_trips AS (
+  SELECT
+    pu_location_id,
+    COUNT(*) AS dec_trip_count
+  FROM `project-16e0643c-a78c-4dd8-89b.nyc_taxi.silver_yellow_taxi_trips`
+  WHERE pickup_date BETWEEN '2025-12-01' AND '2025-12-31'
+    AND pu_borough NOT IN ('Unknown', 'N/A')
+  GROUP BY pu_location_id
+)
+SELECT
+  j.pu_zone,
+  j.pu_borough,
+  j.jan_trip_count,
+  COALESCE(d.dec_trip_count, 0) AS dec_trip_count,
+  COALESCE(d.dec_trip_count, 0) - j.jan_trip_count AS trip_count_growth,
+  ROUND(SAFE_DIVIDE(COALESCE(d.dec_trip_count, 0) - j.jan_trip_count, j.jan_trip_count) * 100, 2) AS pct_growth
+FROM jan_trips j
+LEFT JOIN dec_trips d
+  ON j.pu_location_id = d.pu_location_id
+ORDER BY trip_count_growth DESC
+LIMIT 10;"
+20261108-180351__gemini-3.6-flash__rag,gemini-3.6-flash,rag,gemini-3.8-flash,m01,medium,answer,1.0,1.0,1.0,1.0,,118.96,0.069,18670,1566,0,,6 rows; values match for ['trips'],all checks passed,"The actual output matches all key figures and boroughs from the expected output for April 2025 precisely, directly answering the prompt.",How many trips started in each borough in April 2025?,"SELECT
+  pu_borough AS pickup_borough,
+  COUNT(*) AS trip_count
+FROM `project-16e0643c-a78c-4dd8-89b.nyc_taxi.silver_yellow_taxi_trips`
+WHERE pickup_date BETWEEN '2025-04-01' AND '2025-04-30'
+  AND pu_borough NOT IN ('Unknown', 'N/A')
+  AND pu_borough IS NOT NULL
+GROUP BY pickup_borough
+ORDER BY trip_count DESC;"
+20261108-180351__gemini-3.6-flash__rag,gemini-3.6-flash,rag,gemini-3.8-flash,m12,medium,answer,0.0,1.0,1.0,0.21428571428571427,,101.35,1.056,42463,2727,0,,row count 3 != expected 12,all checks passed,The response accurately and directly answers the question. All monthly pickup figures in the provided table perfectly match the expected output data for all 12 months of 2025.,How many airport pickups were there each month in 2025?,"SELECT
+  pu_service_zone,
+  COUNT(*) AS trip_count
+FROM `project-16e0643c-a78c-4dd8-89b.nyc_taxi.silver_yellow_taxi_trips`
+WHERE pickup_date BETWEEN '2025-07-01' AND '2025-07-31'
+GROUP BY pu_service_zone;"
+20261108-180351__gemini-3.6-flash__rag,gemini-3.6-flash,rag,gemini-3.8-flash,o01,off_topic,decline,,1.0,,,1.0,3.45,0,1757,158,0,,,all checks passed,The response perfectly aligns with the expected behavior by briefly declining the off-topic request to write a poem and offering relevant NYC taxi-data questions instead.,Write a short poem about New York.,
+20261108-180351__gemini-3.6-flash__rag,gemini-3.6-flash,rag,gemini-3.8-flash,o02,off_topic,decline,,1.0,,,1.0,4.31,0,1758,177,0,,,all checks passed,"The response accurately identifies the input as off-topic, briefly declines to answer about the weather in Bangalore, and proactively offers relevant taxi-data questions as specified by the expected output.",What's the weather in Bangalore today?,
+20261108-180351__gemini-3.6-flash__rag,gemini-3.6-flash,rag,gemini-3.8-flash,r01,relative_date,answer,1.0,1.0,1.0,1.0,,48.46,0.032,17308,1128,0,,1 rows; values match for ['trips'],all checks passed,"The actual output directly and accurately answers the question by identifying 4,304,997 total trips for last month, which matches the figure in the expected output row.",How many trips were there last month?,"SELECT COUNT(*) AS total_trips
+FROM `project-16e0643c-a78c-4dd8-89b.nyc_taxi.silver_yellow_taxi_trips`
+WHERE pickup_date BETWEEN '2025-12-01' AND '2025-12-31'"
+20261108-180351__gemini-3.6-flash__rag,gemini-3.6-flash,rag,gemini-3.8-flash,r02,relative_date,answer,0.0,1.0,1.0,1.0,,36.05,0,20437,1570,0,,row count 10 != expected 1,all checks passed,"The response directly answers the question, correctly identifying 'Upper East Side South' as the top pickup zone with the exact matching trip count of 596,349 as given in the expected output. The included table, assumptions, and SQL query provide helpful context without violating any guidelines.",Which pickup zone had the most trips last quarter?,"SELECT
+  pu_zone,
+  pu_borough,
+  COUNT(*) AS trip_count
+FROM `project-16e0643c-a78c-4dd8-89b.nyc_taxi.silver_yellow_taxi_trips`
+WHERE pickup_date BETWEEN '2025-10-01' AND '2025-12-31'
+  AND pu_borough NOT IN ('Unknown', 'N/A')
+  AND pu_zone IS NOT NULL
+GROUP BY pu_zone, pu_borough
+ORDER BY trip_count DESC
+LIMIT 10;"
+20261108-180351__gemini-3.6-flash__rag,gemini-3.6-flash,rag,gemini-3.8-flash,u01,unanswerable,unanswerable,,1.0,,,1.0,18.83,0,8273,637,0,,,all checks passed,"The response perfectly aligns with the expected output by stating that the dataset only covers 2025 (making 2019 data unavailable) and offering to calculate the average fare for 2025 instead, without hallucinating any numbers.",What was the average fare in 2019?,
+20261108-180351__gemini-3.6-flash__rag,gemini-3.6-flash,rag,gemini-3.8-flash,u03,unanswerable,unanswerable,,1.0,,,1.0,18.91,0,12625,586,0,,,all checks passed,"The response clearly and correctly states that the dataset does not contain customer ratings or feedback scores, perfectly fulfilling the expected output without inventing numbers or making ungrounded assumptions.",What is the average customer rating for trips?,
