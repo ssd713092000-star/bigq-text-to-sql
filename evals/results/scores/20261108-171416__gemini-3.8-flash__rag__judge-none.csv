@@ -1,0 +1,19 @@
+run_id,model,config,judge,id,category,expected_behavior,execution_accuracy,workflow,answer_correctness,faithfulness,behavior,latency_s,gb_processed,input_tokens,output_tokens,n_validate_failures,error,exec_reason,workflow_reason,judge_reason,question,final_sql
+20261108-171416__gemini-3.8-flash__rag,gemini-3.8-flash,rag,,e01,easy,answer,1.0,1.0,,,,33.96,0.031,10030,603,0,,1 rows; values match for ['trips'],all checks passed,,How many trips were there in March 2025?,"SELECT COUNT(*) AS total_trips
+FROM `project-16e0643c-a78c-4dd8-89b.nyc_taxi.silver_yellow_taxi_trips`
+WHERE pickup_date BETWEEN '2025-03-01' AND '2025-03-31';"
+20261108-171416__gemini-3.8-flash__rag,gemini-3.8-flash,rag,,m06,medium,answer,1.0,1.0,,,,68.25,2.259,25382,2229,0,,2 rows; values match for ['avg_tip_pct'],all checks passed,,Compare the average tip percentage for credit card pickups at JFK Airport and LaGuardia Airport in 2025.,"SELECT
+  pu_zone AS airport,
+  COUNT(*) AS trips,
+  ROUND(AVG(SAFE_DIVIDE(tip_amount, fare_amount)) * 100, 2) AS avg_tip_pct,
+  ROUND(SAFE_DIVIDE(SUM(tip_amount), SUM(fare_amount)) * 100, 2) AS overall_tip_pct,
+  ROUND(AVG(tip_amount), 2) AS avg_tip_usd,
+  ROUND(AVG(fare_amount), 2) AS avg_fare_usd
+FROM `project-16e0643c-a78c-4dd8-89b.nyc_taxi.silver_yellow_taxi_trips`
+WHERE pickup_date BETWEEN '2025-01-01' AND '2025-12-31'
+  AND pu_zone IN ('JFK Airport', 'LaGuardia Airport')
+  AND payment_type = 'Credit card'
+  AND fare_amount > 0
+GROUP BY airport
+ORDER BY airport;"
+20261108-171416__gemini-3.8-flash__rag,gemini-3.8-flash,rag,,a01,ambiguous,clarify,,1.0,,,,3.35,0,1755,323,0,,,all checks passed,,What is the best area?,

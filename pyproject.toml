@@ -1,0 +1,27 @@
+[project]
+name = "data-analyst-ai"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "swayamdas1309", email = "142828299+swayamdas1309@users.noreply.github.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "clickhouse-connect>=1.12.0",
+    "fastmcp>=4.1.6",
+    "fastparquet>=2026.9.0",
+    "google-auth>=2.62.1",
+    "google-cloud-aiplatform>=2.7.0",
+    "google-cloud-bigquery>=3.47.0",
+    "google-cloud-storage>=3.17.1",
+    "ipykernel>=7.4.0",
+    "langchain[mcp]>=1.4.9",
+    "langchain-google-genai>=4.4.3",
+    "polars>=2.1.0",
+    "pyarrow>=26.0.1",
+    "python-dotenv>=1.2.4",
+    "deepeval>=4.3.3",
+    "langchain-google-vertexai[anthropic]>=3.2.5",
+]
+

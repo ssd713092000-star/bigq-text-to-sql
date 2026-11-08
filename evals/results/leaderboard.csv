@@ -1,0 +1,2 @@
+scored_at,run_id,model,config,judge,n_questions,execution_accuracy,exec_acc_easy,exec_acc_medium,exec_acc_hard,exec_acc_relative_date,answer_correctness,faithfulness,behavior,behavior_no_sql_rate,workflow,avg_latency_s,p95_latency_s,avg_gb_per_question,total_input_tokens,total_output_tokens,errors,scores_file
+2026-11-08T17:18:03,20261108-171416__gemini-3.8-flash__rag,gemini-3.8-flash,rag,,3,1.0,1.0,1.0,,,,,,1.0,1.0,35.19,68.25,0.7633,37167,3155,0,results\scores\20261108-171416__gemini-3.8-flash__rag__judge-none.csv
