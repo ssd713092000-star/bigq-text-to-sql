@@ -1,0 +1,91 @@
+# main -> analyst-mcp on Cloud Run (prod). Only sa-api may invoke it.
+name: deploy-mcp
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - mcp_server/**
+      - pyproject.toml
+      - uv.lock
+      - infra/cloudrun/mcp.env.yaml
+      - .github/workflows/deploy-mcp.yml
+      - .github/workflows/_build-push.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-mcp
+  cancel-in-progress: false   # never interrupt a rollout
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with: { enable-cache: true }
+      - run: uv sync --frozen --package analyst-mcp --group dev
+      - run: uv run --no-sync ruff check mcp_server
+      - run: uv run --no-sync pytest -q mcp_server/tests
+
+  build:
+    needs: test
+    uses: ./.github/workflows/_build-push.yml
+    with: { service: mcp, context: ., dockerfile: mcp_server/Dockerfile }
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: prod
+    env:
+      SERVICE: analyst-mcp
+      REGION: ${{ vars.GCP_REGION }}
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      CLOUDSQL_INSTANCE: ${{ vars.CLOUDSQL_INSTANCE }}
+      EXPORT_BUCKET: ${{ vars.EXPORT_BUCKET }}
+      EXAMPLES_BUCKET: ${{ vars.EXAMPLES_BUCKET }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+      - uses: google-github-actions/setup-gcloud@v3
+
+      - name: Render env file
+        run: |
+          # shellcheck disable=SC2016  # literal variable list for envsubst
+          envsubst '${GITHUB_SHA} ${GCP_PROJECT_ID} ${CLOUDSQL_INSTANCE} ${EXPORT_BUCKET} ${EXAMPLES_BUCKET}' \
+            < infra/cloudrun/mcp.env.yaml > /tmp/env.yaml
+          cat /tmp/env.yaml
+
+      - name: Deploy
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --image "${{ needs.build.outputs.image }}" \
+            --region "$REGION" \
+            --service-account "sa-mcp@${GCP_PROJECT_ID}.iam.gserviceaccount.com" \
+            --env-vars-file /tmp/env.yaml \
+            --set-secrets "DB_PASSWORD=db-password:latest" \
+            --add-cloudsql-instances "$CLOUDSQL_INSTANCE" \
+            --ingress "${{ vars.MCP_INGRESS || 'all' }}" \
+            --no-allow-unauthenticated \
+            --port 8080 \
+            --cpu 1 --memory 1Gi --cpu-boost \
+            --concurrency 40 --min-instances 0 --max-instances 5 \
+            --timeout 900 \
+            --startup-probe "httpGet.path=/healthz,periodSeconds=5,failureThreshold=24,timeoutSeconds=3" \
+            --labels "app=analyst,service=mcp,commit=${GITHUB_SHA:0:12}" \
+            --quiet
+
+      - name: Allow only sa-api to call it
+        run: |
+          gcloud run services add-iam-policy-binding "$SERVICE" --region "$REGION" \
+            --member "serviceAccount:sa-api@${GCP_PROJECT_ID}.iam.gserviceaccount.com" \
+            --role roles/run.invoker --quiet >/dev/null
+          echo "Invokers:"; gcloud run services get-iam-policy "$SERVICE" --region "$REGION" \
+            --flatten='bindings[].members' --filter='bindings.role:roles/run.invoker' --format='value(bindings.members)'

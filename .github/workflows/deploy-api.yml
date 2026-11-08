@@ -1,0 +1,129 @@
+# main -> migrate job (Cloud SQL schema) -> analyst-api on Cloud Run (prod).
+name: deploy-api
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - api/**
+      - pyproject.toml
+      - uv.lock
+      - infra/cloudrun/api.env.yaml
+      - .github/workflows/deploy-api.yml
+      - .github/workflows/_build-push.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+env:
+  REGION: ${{ vars.GCP_REGION }}
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  CLOUDSQL_INSTANCE: ${{ vars.CLOUDSQL_INSTANCE }}
+  EXAMPLES_BUCKET: ${{ vars.EXAMPLES_BUCKET }}
+  GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+  # Cloud Run URLs are deterministic: https://<service>-<project-number>.<region>.run.app
+  WEB_URL: https://analyst-web-${{ vars.GCP_PROJECT_NUMBER }}.${{ vars.GCP_REGION }}.run.app
+  API_URL: https://analyst-api-${{ vars.GCP_PROJECT_NUMBER }}.${{ vars.GCP_REGION }}.run.app
+  MCP_URL: https://analyst-mcp-${{ vars.GCP_PROJECT_NUMBER }}.${{ vars.GCP_REGION }}.run.app
+  # Phase 2+ adds: TOKEN_ENCRYPTION_KEY=token-encryption-key:latest, AUTH_SECRET=auth-secret:latest, ...
+  API_SECRETS: DB_PASSWORD=db-password:latest
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with: { enable-cache: true }
+      - run: uv sync --frozen --package analyst-api --group dev
+      - run: uv run --no-sync ruff check api
+      - run: uv run --no-sync pytest -q api/tests
+
+  build:
+    needs: test
+    uses: ./.github/workflows/_build-push.yml
+    with: { service: api, context: ., dockerfile: api/Dockerfile }
+
+  migrate:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - uses: actions/checkout@v7
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Render env file
+        run: |
+          # shellcheck disable=SC2016  # literal variable list for envsubst
+          envsubst '${GITHUB_SHA} ${WEB_URL} ${CLOUDSQL_INSTANCE} ${MCP_URL} ${GCP_PROJECT_ID} ${EXAMPLES_BUCKET} ${GOOGLE_CLIENT_ID}' \
+            < infra/cloudrun/api.env.yaml > /tmp/env.yaml
+      - name: Deploy + run the migrate job (extension, schemas, Alembic, LangGraph checkpointer)
+        run: |
+          gcloud run jobs deploy analyst-migrate \
+            --image "${{ needs.build.outputs.image }}" \
+            --region "$REGION" \
+            --service-account "sa-migrate@${GCP_PROJECT_ID}.iam.gserviceaccount.com" \
+            --env-vars-file /tmp/env.yaml \
+            --set-secrets "DB_PASSWORD=db-password:latest" \
+            --set-cloudsql-instances "$CLOUDSQL_INSTANCE" \
+            --command python --args="-m,app.migrate" \
+            --tasks 1 --max-retries 0 --task-timeout 600s \
+            --labels "app=analyst,service=migrate,commit=${GITHUB_SHA:0:12}" \
+            --execute-now --wait \
+            --quiet
+
+  deploy:
+    needs: [build, migrate]
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - uses: actions/checkout@v7
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Render env file
+        run: |
+          # shellcheck disable=SC2016  # literal variable list for envsubst
+          envsubst '${GITHUB_SHA} ${WEB_URL} ${CLOUDSQL_INSTANCE} ${MCP_URL} ${GCP_PROJECT_ID} ${EXAMPLES_BUCKET} ${GOOGLE_CLIENT_ID}' \
+            < infra/cloudrun/api.env.yaml > /tmp/env.yaml
+          cat /tmp/env.yaml
+      - name: Deploy
+        run: |
+          network_flags=()
+          if [ "${{ vars.MCP_INGRESS }}" = "internal" ]; then
+            # mcp only accepts internal traffic: route all api egress through the VPC (NAT set up by bootstrap.sh)
+            network_flags=(--network default --subnet default --vpc-egress all-traffic)
+          fi
+          gcloud run deploy analyst-api \
+            --image "${{ needs.build.outputs.image }}" \
+            --region "$REGION" \
+            --service-account "sa-api@${GCP_PROJECT_ID}.iam.gserviceaccount.com" \
+            --env-vars-file /tmp/env.yaml \
+            --set-secrets "$API_SECRETS" \
+            --add-cloudsql-instances "$CLOUDSQL_INSTANCE" \
+            "${network_flags[@]}" \
+            --ingress all \
+            --allow-unauthenticated \
+            --port 8080 \
+            --cpu 1 --memory 1Gi --cpu-boost \
+            --concurrency 40 --min-instances 0 --max-instances 5 \
+            --timeout 3600 \
+            --startup-probe "httpGet.path=/readyz,periodSeconds=5,failureThreshold=24,timeoutSeconds=3" \
+            --liveness-probe "httpGet.path=/healthz,periodSeconds=30,failureThreshold=3,timeoutSeconds=3" \
+            --labels "app=analyst,service=api,commit=${GITHUB_SHA:0:12}" \
+            --quiet
+      - name: Smoke test
+        run: |
+          curl -fsS --retry 5 --retry-delay 3 "$API_URL/readyz"; echo
+          curl -fsS "$API_URL/version"; echo

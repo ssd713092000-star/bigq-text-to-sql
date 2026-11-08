@@ -96,7 +96,10 @@ services:
       retries: 10
 
   web:
-    build: { context: ../web, dockerfile: Dockerfile }
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+      args: { NEXT_PUBLIC_API_URL: "http://localhost:8080" }
     image: analyst-web:local
     environment:
       API_URL: http://api:8080                      # server-side calls (inside the compose network)
