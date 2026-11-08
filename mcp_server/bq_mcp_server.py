@@ -59,9 +59,9 @@ import hashlib
 import hmac
 import inspect
 import logging
-import secrets
 import os
 import re
+import secrets
 import sys
 import time
 from contextvars import ContextVar
@@ -118,7 +118,7 @@ AUTH_MODE = os.getenv("AUTH_MODE", "google").lower()
 ALLOWED_EMAILS = set(_csv("ALLOWED_EMAILS"))
 ALLOWED_DOMAINS = set(_csv("ALLOWED_DOMAINS"))
 HOST = os.getenv("MCP_HOST", "127.0.0.1")
-PORT = int(os.getenv("MCP_PORT", "8000"))
+PORT = int(os.getenv("MCP_PORT") or os.getenv("PORT") or "8000")  # Cloud Run sets PORT
 
 BQ_SCOPE = "https://www.googleapis.com/auth/bigquery"
 IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,299}$")
@@ -339,7 +339,7 @@ APPROVE_KEY = "approve_query"
 APPROVE_CHOICES = ["Run query", "Cancel"]
 
 
-def _approval_message(sql: str, info: "DryRun") -> str:
+def _approval_message(sql: str, info: DryRun) -> str:
     return (
         "The agent wants to run this BigQuery query:\n\n"
         f"{sql.strip()}\n\n"
@@ -415,7 +415,7 @@ async def confirm(ctx: Context, *, key: str, message: str, title: str, choices: 
     )
 
 
-async def ask_user_to_approve(ctx: Context, sql: str, info: "DryRun", email: str):
+async def ask_user_to_approve(ctx: Context, sql: str, info: DryRun, email: str):
     return await confirm(ctx, key=APPROVE_KEY, message=_approval_message(sql, info),
                          title="Run this query?", choices=APPROVE_CHOICES, bind=sql, email=email)
 
@@ -625,6 +625,14 @@ mcp = FastMCP(
 )
 
 
+@mcp.custom_route("/healthz", methods=["GET"], include_in_schema=False)
+async def healthz(_request):
+    """Liveness probe for compose / Cloud Run. Unauthenticated, no GCP calls."""
+    from starlette.responses import JSONResponse
+
+    return JSONResponse({"status": "ok", "project": PROJECT, "auth_mode": AUTH_MODE})
+
+
 @mcp.tool(annotations=READ_ONLY)
 @logged_tool
 def whoami() -> dict[str, Any]:
@@ -747,7 +755,9 @@ def validate_sql(sql: str) -> dict[str, Any]:
 
 @mcp.tool(annotations=READ_ONLY)
 @logged_tool
-async def run_sql(sql: str, ctx: Context, approval_id: str | None = None) -> "dict[str, Any] | mcp_types.InputRequiredResult":
+async def run_sql(
+    sql: str, ctx: Context, approval_id: str | None = None
+) -> dict[str, Any] | mcp_types.InputRequiredResult:
     """Run a read-only SELECT. The user is shown the SQL, estimated GB and cost and must approve it.
     Up to BQ_MAX_ROWS rows come back inline; bigger results are exported to GCS and returned as links
     (with a preview of the first rows). Aggregate in SQL; don't pull raw rows to count or sum.
@@ -870,7 +880,7 @@ async def search_examples(question: str, k: int = 3) -> dict[str, Any]:
                        "openWorldHint": False})
 @logged_tool
 async def save_example(question: str, sql: str, ctx: Context, notes: str = "",
-                       approval_id: str | None = None) -> "dict[str, Any] | mcp_types.InputRequiredResult":
+                       approval_id: str | None = None) -> dict[str, Any] | mcp_types.InputRequiredResult:
     """Save a question -> SQL pair as a verified example for future questions.
     ONLY call after the user has confirmed the answer was correct. The user is asked to confirm
     again before saving. If the response has needs_confirmation=true, show the question and SQL
@@ -891,7 +901,8 @@ async def save_example(question: str, sql: str, ctx: Context, notes: str = "",
     if not approval_valid(approval_id, bind, email):
         decision = await confirm(
             ctx, key=SAVE_KEY, title="Is this answer correct?", choices=SAVE_CHOICES, bind=bind, email=email,
-            message=f"Save this as a verified example for future questions?\n\nQuestion: {question.strip()}\n\n{sql.strip()}",
+            message=(f"Save this as a verified example for future questions?\n\n"
+                     f"Question: {question.strip()}\n\n{sql.strip()}"),
         )
         log.info("save_example: confirmation decision=%s",
                  decision if isinstance(decision, str) else type(decision).__name__)

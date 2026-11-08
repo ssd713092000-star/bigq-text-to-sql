@@ -1,7 +1,8 @@
 """
 Verified question -> SQL examples, stored as .sql files in GCS and indexed by Vertex AI RAG Engine.
 
-Each example is ONE <id>.sql.txt file (.txt so RAG Engine's parser accepts it): question + metadata as comments, then the SQL.
+Each example is ONE <id>.sql.txt file (.txt so RAG Engine's parser accepts it):
+question + metadata as comments, then the SQL.
 GCS is the source of truth; the RAG corpus indexes those same files, so one retrieval
 returns the complete example (question + SQL) to use as a few-shot prompt.
 

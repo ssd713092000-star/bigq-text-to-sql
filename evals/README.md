@@ -48,7 +48,7 @@ Judge: a Gemini model on Vertex (`--judge` or `JUDGE_MODEL`). Prefer a judge tha
 uv add deepeval "langchain[mcp]" langchain-google-genai "langchain-google-vertexai[anthropic]" google-cloud-bigquery python-dotenv
 
 # 1. MCP server running (AUTH_MODE=none is simplest for unattended evals)
-uv run bigq_mcp/bq_mcp_server.py
+uv run mcp_server/bq_mcp_server.py
 
 # 2. Expected results (once, and again after rebuilding the silver table)
 uv run evals/build_golden.py

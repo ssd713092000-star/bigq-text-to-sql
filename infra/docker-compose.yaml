@@ -1,0 +1,125 @@
+# Local stack.  From the repo root:  docker compose -f infra/docker-compose.yaml --env-file infra/.env up --build
+# (or scripts/dev.ps1 up / make up).  Only web (3000), api (8080) and postgres (127.0.0.1) are published.
+name: analyst
+
+x-gcp-creds: &gcp-creds
+  # Host gcloud ADC, read-only: Windows %APPDATA%\gcloud, Linux/macOS ~/.config/gcloud  (see docs/local-dev.md)
+  - type: bind
+    source: ${GCLOUD_CONFIG_DIR:?set GCLOUD_CONFIG_DIR in infra/.env}
+    target: /gcloud
+    read_only: true
+
+x-gcp-env: &gcp-env
+  GOOGLE_APPLICATION_CREDENTIALS: /gcloud/application_default_credentials.json
+  GOOGLE_CLOUD_PROJECT: ${GCP_PROJECT}
+
+x-db-env: &db-env
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_NAME: ${DB_NAME:-analyst}
+  DB_USER: ${DB_USER:-analyst}
+  DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in infra/.env}
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.7-pg17     # matches Cloud SQL POSTGRES_17 + pgvector
+    environment:
+      POSTGRES_DB: ${DB_NAME:-analyst}
+      POSTGRES_USER: ${DB_USER:-analyst}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports: ["127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"]
+    volumes: [pg_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build: { context: .., dockerfile: api/Dockerfile }
+    image: analyst-api:local
+    command: ["python", "-m", "app.migrate"]
+    environment:
+      <<: *db-env
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  mcp:
+    build: { context: .., dockerfile: mcp_server/Dockerfile }
+    image: analyst-mcp:local
+    environment:
+      <<: *gcp-env
+      BQ_PROJECT: ${GCP_PROJECT}
+      BQ_DATASET: ${BQ_DATASET:-nyc_taxi}           # removed in phase 3 (multi-dataset)
+      BQ_LOCATION: ${BQ_LOCATION:-asia-south1}
+      BQ_MAX_GB: ${BQ_MAX_GB:-2}
+      BQ_MAX_ROWS: ${BQ_MAX_ROWS:-500}
+      AUTH_MODE: none                               # phase 3: Google token verification
+      REQUIRE_APPROVAL: "false"                     # the API enforces approval (HITL)
+      EXPORT_BUCKET: ${EXPORT_BUCKET:-}
+      SIGNER_SERVICE_ACCOUNT: ${SIGNER_SERVICE_ACCOUNT:-}
+      RAG_LOCATION: ${RAG_LOCATION:-us-central1}
+      RAG_CORPUS_NAME: ${RAG_CORPUS_NAME:-}
+      EXAMPLES_BUCKET: ${EXAMPLES_BUCKET:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes: *gcp-creds
+    expose: ["8000"]                                # internal only
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: { context: .., dockerfile: api/Dockerfile }
+    image: analyst-api:local
+    environment:
+      <<: [*db-env, *gcp-env]
+      APP_ENV: local
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      WEB_ORIGIN: http://localhost:3000
+      MCP_URL: http://mcp:8000/mcp
+      GEMINI_LOCATION: ${GEMINI_LOCATION:-global}
+      CLAUDE_LOCATION: ${CLAUDE_LOCATION:-us-east5}
+      RAG_LOCATION: ${RAG_LOCATION:-us-central1}
+    volumes: *gcp-creds
+    ports: ["8080:8080"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      mcp: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/readyz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: { context: ../web, dockerfile: Dockerfile }
+    image: analyst-web:local
+    environment:
+      API_URL: http://api:8080                      # server-side calls (inside the compose network)
+      NEXT_PUBLIC_API_URL: http://localhost:8080    # browser calls
+    ports: ["3000:3000"]
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # docker compose --profile inspector up mcp-inspector  ->  http://localhost:6274 , server URL http://mcp:8000/mcp
+  mcp-inspector:
+    profiles: ["inspector"]
+    image: node:24-alpine
+    command: ["npx", "-y", "@modelcontextprotocol/inspector@2.14.0"]
+    environment:
+      HOST: 0.0.0.0
+      DANGEROUSLY_OMIT_AUTH: "false"
+    ports: ["127.0.0.1:6274:6274", "127.0.0.1:6277:6277"]
+    depends_on: [mcp]
+
+volumes:
+  pg_data:

@@ -1,0 +1,15 @@
+[project]
+name = "analyst-mcp"
+version = "0.1.0"
+description = "Read-only, multi-tenant BigQuery MCP server (FastMCP)"
+requires-python = ">=3.13"
+dependencies = [
+    "fastmcp>=4.1.6",
+    "google-auth>=2.62.1",
+    "google-cloud-aiplatform>=2.7.0",
+    "google-cloud-bigquery>=3.47.0",
+    "google-cloud-storage>=3.17.1",
+]
+
+[tool.uv]
+package = false

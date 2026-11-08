@@ -126,7 +126,7 @@ def check_server(url: str) -> None:
     try:
         httpx.get(url, timeout=5)  # any HTTP response (even 4xx) means the server is up
     except httpx.HTTPError:
-        sys.exit(f"MCP server not reachable at {url}. Start it first:  uv run bigq_mcp/bq_mcp_server.py")
+        sys.exit(f"MCP server not reachable at {url}. Start it first:  uv run mcp_server/bq_mcp_server.py")
 
 
 def print_comparison(summaries: list[dict], batch: str) -> None:

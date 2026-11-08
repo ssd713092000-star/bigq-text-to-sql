@@ -12,3 +12,7 @@ data/
 .env
 # DeepEval local cache
 .deepeval/
+
+# old MCP folder (kept on disk while a server runs from it)
+bigq_mcp/
+.venv-ws/
