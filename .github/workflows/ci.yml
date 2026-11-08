@@ -47,7 +47,7 @@ jobs:
     env: { DB_HOST: localhost, DB_PORT: "5432", DB_USER: analyst, DB_PASSWORD: test, REQUIRE_DB_TESTS: "1" }
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.3
         with: { enable-cache: true }
       - run: uv sync --frozen --all-packages
       - run: uv run ruff check api mcp_server
