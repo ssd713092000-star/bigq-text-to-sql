@@ -121,8 +121,7 @@ grant_secret "$SECRET_DB_PASSWORD" "$SA_MIGRATE"
 grant_secret "$SECRET_TOKEN_KEY" "$SA_API"
 grant_secret "$SECRET_OAUTH_CLIENT_SECRET" "$SA_API"
 grant_secret "$SECRET_OAUTH_CLIENT_SECRET" "$SA_WEB"
-grant_secret "$SECRET_AUTH_SECRET" "$SA_WEB"
-grant_secret "$SECRET_AUTH_SECRET" "$SA_API"
+grant_secret "$SECRET_AUTH_SECRET" "$SA_WEB"   # Auth.js cookie encryption: web only
 secret_has_version "$SECRET_OAUTH_CLIENT_SECRET" || \
   warn "No OAuth client secret yet. Add it:  printf %s 'SECRET' | gcloud secrets versions add $SECRET_OAUTH_CLIENT_SECRET --data-file=-"
 

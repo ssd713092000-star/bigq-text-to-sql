@@ -31,12 +31,20 @@ env:
   WEB_URL: https://analyst-web-${{ vars.GCP_PROJECT_NUMBER }}.${{ vars.GCP_REGION }}.run.app
   API_URL: https://analyst-api-${{ vars.GCP_PROJECT_NUMBER }}.${{ vars.GCP_REGION }}.run.app
   MCP_URL: https://analyst-mcp-${{ vars.GCP_PROJECT_NUMBER }}.${{ vars.GCP_REGION }}.run.app
-  # Phase 2+ adds: TOKEN_ENCRYPTION_KEY=token-encryption-key:latest, AUTH_SECRET=auth-secret:latest, ...
-  API_SECRETS: DB_PASSWORD=db-password:latest
+  API_SECRETS: >-
+    DB_PASSWORD=db-password:latest,TOKEN_ENCRYPTION_KEY=token-encryption-key:latest,GOOGLE_CLIENT_SECRET=google-oauth-client-secret:latest
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.7-pg17
+        env: { POSTGRES_USER: analyst, POSTGRES_PASSWORD: test, POSTGRES_DB: analyst }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U analyst" --health-interval 5s --health-timeout 3s --health-retries 20
+    env: { DB_HOST: localhost, DB_PORT: "5432", DB_USER: analyst, DB_PASSWORD: test, REQUIRE_DB_TESTS: "1" }
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10

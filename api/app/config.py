@@ -32,6 +32,13 @@ class Settings(BaseSettings):
 
     mcp_url: str = Field("http://mcp:8000/mcp", alias="MCP_URL")
 
+    # Google OAuth (same web client Auth.js uses). The secret is needed to refresh users' access tokens.
+    google_client_id: str = Field("", alias="GOOGLE_CLIENT_ID")
+    google_client_secret: str = Field("", alias="GOOGLE_CLIENT_SECRET")
+    # Fernet key(s) for stored refresh tokens. Comma-separated: first encrypts, all decrypt (rotation).
+    token_encryption_key: str = Field("", alias="TOKEN_ENCRYPTION_KEY")
+    session_ttl_hours: int = Field(24 * 7, alias="SESSION_TTL_HOURS")  # keep equal to Auth.js session maxAge
+
     @property
     def _is_socket(self) -> bool:
         return self.db_host.startswith("/")

@@ -7,9 +7,14 @@ def test_healthz_needs_no_database(monkeypatch):
     # point at a DB that doesn't exist: liveness must still pass, readiness must fail cleanly
     monkeypatch.setenv("DB_HOST", "127.0.0.1")
     monkeypatch.setenv("DB_PORT", "1")
+    from cryptography.fernet import Fernet
+
+    monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode())  # config OK, so the DB is what fails
+    from app import security
     from app.config import get_settings
 
     get_settings.cache_clear()
+    security._fernet.cache_clear()
     from app.main import app
 
     with TestClient(app) as client:
@@ -17,6 +22,22 @@ def test_healthz_needs_no_database(monkeypatch):
         r = client.get("/readyz")
         assert r.status_code == 503
         assert r.json()["db"] == "error"
+
+
+def test_readyz_fails_on_bad_encryption_key(monkeypatch):
+    monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", "# python -c from cryptography...")  # the bug that prompted this
+    from app import security
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    security._fernet.cache_clear()
+    from app.main import app
+
+    with TestClient(app) as client:
+        r = client.get("/readyz")
+    assert r.status_code == 503 and "TOKEN_ENCRYPTION_KEY" in r.json()["config"]
+    get_settings.cache_clear()
+    security._fernet.cache_clear()
 
 
 def test_cloud_sql_socket_urls():

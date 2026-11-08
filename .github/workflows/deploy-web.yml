@@ -33,12 +33,7 @@ jobs:
   build:
     needs: test
     uses: ./.github/workflows/_build-push.yml
-    with:
-      service: web
-      context: web
-      dockerfile: web/Dockerfile
-      # browser-side API URL is inlined at build time
-      build-args: NEXT_PUBLIC_API_URL=https://analyst-api-${{ vars.GCP_PROJECT_NUMBER }}.${{ vars.GCP_REGION }}.run.app
+    with: { service: web, context: web, dockerfile: web/Dockerfile }
 
   deploy:
     needs: build
@@ -63,13 +58,14 @@ jobs:
           envsubst '${GITHUB_SHA} ${API_URL} ${WEB_URL} ${GOOGLE_CLIENT_ID}' < infra/cloudrun/web.env.yaml > /tmp/env.yaml
           cat /tmp/env.yaml
       - name: Deploy
-        # Phase 2 adds: --set-secrets AUTH_SECRET=auth-secret:latest,AUTH_GOOGLE_SECRET=google-oauth-client-secret:latest
         run: |
           gcloud run deploy analyst-web \
             --image "${{ needs.build.outputs.image }}" \
             --region "$REGION" \
             --service-account "sa-web@${GCP_PROJECT_ID}.iam.gserviceaccount.com" \
             --env-vars-file /tmp/env.yaml \
+            --set-secrets "AUTH_SECRET=auth-secret:latest,AUTH_GOOGLE_SECRET=google-oauth-client-secret:latest" \
+            --timeout 3600 \
             --ingress all \
             --allow-unauthenticated \
             --port 8080 \

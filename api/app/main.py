@@ -13,6 +13,7 @@ from sqlalchemy import text
 from app import db
 from app.config import APP_SCHEMA, get_settings
 from app.logging_setup import setup_logging
+from app.routers import auth as auth_router
 
 log = logging.getLogger("api")
 
@@ -36,6 +37,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(auth_router.router)
 
 
 @app.get("/healthz", tags=["ops"])
@@ -46,7 +48,16 @@ async def healthz() -> dict:
 
 @app.get("/readyz", tags=["ops"])
 async def readyz() -> JSONResponse:
-    """Readiness: DB reachable and migrated."""
+    """Readiness: config valid, DB reachable and migrated. Cloud Run's startup probe uses this, so a revision
+    with a broken key never receives traffic."""
+    from app.security import TokenKeyError, _fernet
+
+    try:
+        _fernet()
+    except TokenKeyError as e:
+        log.error("readiness: bad config", extra={"error": str(e)})
+        return JSONResponse({"status": "unavailable", "config": "TOKEN_ENCRYPTION_KEY missing or invalid"},
+                            status_code=503)
     try:
         async with db.engine().connect() as conn:
             version = (await conn.execute(text(f"SELECT version_num FROM {APP_SCHEMA}.alembic_version"))).scalar()

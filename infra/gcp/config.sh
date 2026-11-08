@@ -9,7 +9,7 @@ GEMINI_LOCATION="${GEMINI_LOCATION:-global}"
 CLAUDE_LOCATION="${CLAUDE_LOCATION:-us-east5}"
 
 # GitHub repository allowed to deploy (Workload Identity Federation). REQUIRED: owner/name, exactly as on GitHub.
-GITHUB_REPO="${GITHUB_REPO:-}"
+GITHUB_REPO="${GITHUB_REPO:-ssd713092000-star/bigq-text-to-sql}"
 
 # Artifact Registry
 AR_REPO="${AR_REPO:-analyst}"

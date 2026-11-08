@@ -6,7 +6,9 @@ requires-python = ">=3.13"
 dependencies = [
     "alembic>=1.20.1",
     "asyncpg>=0.32.0",
+    "cryptography>=50.0.2",
     "fastapi>=0.162.2",
+    "google-auth[requests]>=2.62.1",
     "httpx>=0.28.1",
     "langgraph-checkpoint-postgres>=3.2.0",
     "psycopg[binary,pool]>=3.3.8",

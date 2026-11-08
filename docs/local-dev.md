@@ -20,6 +20,12 @@ Copy-Item infra\.env.example infra\.env   # then fill it in
 .\scripts\dev.ps1 up                       # Linux/macOS: make up
 ```
 
+To sign in locally, add `http://localhost:3000/api/auth/callback/google` as an authorized redirect URI (and
+`http://localhost:3000` as a JavaScript origin) on your OAuth client. See [auth.md](auth.md).
+
+Tests: `uv run pytest -q`. The api DB tests create a throwaway `analyst_test` database on the compose Postgres, so
+export `DB_PASSWORD` from `infra/.env` first. Without a reachable Postgres they're skipped locally; in CI they must run.
+
 | URL | Service |
 |---|---|
 | http://localhost:3000 | web (Next.js) |

@@ -81,6 +81,9 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       WEB_ORIGIN: http://localhost:3000
       MCP_URL: http://mcp:8000/mcp
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?set TOKEN_ENCRYPTION_KEY in infra/.env}
       GEMINI_LOCATION: ${GEMINI_LOCATION:-global}
       CLAUDE_LOCATION: ${CLAUDE_LOCATION:-us-east5}
       RAG_LOCATION: ${RAG_LOCATION:-us-central1}
@@ -96,14 +99,15 @@ services:
       retries: 10
 
   web:
-    build:
-      context: ../web
-      dockerfile: Dockerfile
-      args: { NEXT_PUBLIC_API_URL: "http://localhost:8080" }
+    build: { context: ../web, dockerfile: Dockerfile }
     image: analyst-web:local
     environment:
-      API_URL: http://api:8080                      # server-side calls (inside the compose network)
-      NEXT_PUBLIC_API_URL: http://localhost:8080    # browser calls
+      API_URL: http://api:8080                      # server-side only; the browser talks to web (/api/backend/*)
+      AUTH_URL: http://localhost:3000
+      AUTH_TRUST_HOST: "true"
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in infra/.env}
+      AUTH_GOOGLE_ID: ${GOOGLE_CLIENT_ID:?set GOOGLE_CLIENT_ID in infra/.env}
+      AUTH_GOOGLE_SECRET: ${GOOGLE_CLIENT_SECRET:?set GOOGLE_CLIENT_SECRET in infra/.env}
     ports: ["3000:3000"]
     depends_on:
       api: { condition: service_healthy }

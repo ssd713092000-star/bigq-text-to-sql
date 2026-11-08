@@ -37,6 +37,14 @@ jobs:
     needs: changes
     if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
+    services:
+      postgres:   # api DB tests build a throwaway database here with the real migrations
+        image: pgvector/pgvector:0.8.7-pg17
+        env: { POSTGRES_USER: analyst, POSTGRES_PASSWORD: test, POSTGRES_DB: analyst }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U analyst" --health-interval 5s --health-timeout 3s --health-retries 20
+    env: { DB_HOST: localhost, DB_PORT: "5432", DB_USER: analyst, DB_PASSWORD: test, REQUIRE_DB_TESTS: "1" }
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10

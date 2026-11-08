@@ -9,9 +9,8 @@ FROM node:24-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# NEXT_PUBLIC_* values are inlined into the browser bundle at build time
-ARG NEXT_PUBLIC_API_URL=http://localhost:8080
-ENV NEXT_TELEMETRY_DISABLED=1 NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+# No NEXT_PUBLIC_* settings: the browser only talks to this app; the API URL is a runtime server setting.
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 FROM node:24-alpine AS runtime
