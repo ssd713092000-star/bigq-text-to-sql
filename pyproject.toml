@@ -34,7 +34,7 @@ members = ["api", "mcp_server", "evals"]
 [tool.ruff]
 line-length = 120
 target-version = "py313"
-extend-exclude = ["bigq_mcp", "*.ipynb"]
+extend-exclude = ["*.ipynb"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]

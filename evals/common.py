@@ -22,13 +22,12 @@ EVAL_TODAY = os.getenv("EVAL_TODAY", "2026-01-15")
 
 
 def load_env() -> None:
-    """Load the project's .env (mcp_server/.env; bigq_mcp/.env from before the move) if python-dotenv is installed."""
+    """Load the project's .env (mcp_server/.env) if python-dotenv is installed."""
     try:
         from dotenv import load_dotenv
     except ImportError:
         return
-    for candidate in (ROOT.parent / "mcp_server" / ".env", ROOT.parent / "bigq_mcp" / ".env", ROOT / ".env",
-                      Path.cwd() / ".env"):
+    for candidate in (ROOT.parent / "mcp_server" / ".env", ROOT / ".env", Path.cwd() / ".env"):
         if candidate.exists():
             load_dotenv(candidate)
             return

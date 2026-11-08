@@ -7,7 +7,6 @@
 **/.ruff_cache
 .deepeval
 data
-bigq_mcp
 **/.env
 **/.env.*
 !**/.env.example
